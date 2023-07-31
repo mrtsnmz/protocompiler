@@ -1,5 +1,5 @@
 // ProtoService.java
-package ProtoCompiler.src.main.java.protoCompiler;
+package ProtoCompiler.src.main.java.protocompiler;
 
 import java.util.List;
 

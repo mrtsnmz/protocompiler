@@ -1,4 +1,4 @@
-package ProtoCompiler.src.main.java.protoCompiler;
+package ProtoCompiler.src.main.java.protocompiler;
 
 import com.google.protobuf.compiler.PluginProtos.CodeGeneratorResponse;
 import com.google.protobuf.compiler.PluginProtos.CodeGeneratorResponse.File;
@@ -6,6 +6,8 @@ import com.google.protobuf.compiler.PluginProtos.CodeGeneratorResponse.File;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.MalformedURLException;
@@ -15,6 +17,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.*;
 
 public class ProtoCompiler {
@@ -161,6 +164,7 @@ public class ProtoCompiler {
         protoMessage.setMethodName(methodName);
         protoMessage.setReturnName(method.getReturnType().getSimpleName());
         protoMessage.setReturnType(method.getReturnType());
+        protoMessage.setGenericReturnType(method.getGenericReturnType());
         return protoMessage;
     }
 
@@ -222,9 +226,11 @@ public class ProtoCompiler {
             respDto.setType(protoMessage.getReturnType());
             respDto.setName(protoMessage.getMessageName());
             respDto.setAnnotatedType(protoMessage.getReturnType().getAnnotatedSuperclass());
+            respDto.setGenericReturnType(protoMessage.getGenericReturnType());
+
             responseList.add(respDto);
 
-            contentBuilder.append(checkParameterType(responseList, contentBuilder));
+            contentBuilder.append(writeParameterType(responseList, contentBuilder));
 
             contentBuilder.append("message ").append(protoMessage.getMessageName().substring(0, 1).toUpperCase()
                     + protoMessage.getMessageName().substring(1)).append("Request {\n");
@@ -235,10 +241,11 @@ public class ProtoCompiler {
                 dto.setAnnotatedType(parameter.getAnnotatedType());
                 dto.setType(parameter.getType());
                 dto.setName(parameter.getName());
+                dto.setGenericReturnType(parameter.getParameterizedType());
                 list.add(dto);
             }
 
-            contentBuilder.append(checkParameterType(list, contentBuilder));
+            contentBuilder.append(writeParameterType(list, contentBuilder));
         });
 
 
@@ -249,7 +256,7 @@ public class ProtoCompiler {
                     .append("  rpc ")
                     .append(protoMessage.getMessageName().substring(0, 1).toUpperCase()
                             + protoMessage.getMessageName().substring(1))
-                    .append("(")
+                    .append(" (")
                     .append(protoMessage.getMessageName().substring(0, 1).toUpperCase()
                             + protoMessage.getMessageName().substring(1)).append("Request) returns (")
                     .append(protoMessage.getMessageName().substring(0, 1).toUpperCase()
@@ -261,7 +268,61 @@ public class ProtoCompiler {
         return contentBuilder.toString();
     }
 
-    private static StringBuilder checkParameterType(List<ParameterDto> list, StringBuilder currentContentBuilder) {
+    private static TypeDto typeMapper(ParameterDto parameter) {
+        TypeDto dto = new TypeDto();
+        dto.setCustomFlag(false);
+        dto.setDecimalFlag(false);
+
+        Class<?> type = parameter.getType();
+
+        if (type == String.class) {
+            dto.setName("string");
+        } else if (type == Integer.class) {
+            dto.setName("int32");
+        } else if (type == Long.class) {
+            dto.setName("int64");
+        } else if (type == Boolean.class) {
+            dto.setName("bool");
+        } else if (type == Double.class ||
+                type == Float.class ||
+                type == BigDecimal.class) {
+            dto.setName("DecimalValue");
+            dto.setDecimalFlag(true);
+            dto.setCustomFlag(true);
+        } else if (type == Byte.class) {
+            dto.setName("byte");
+        } else if (type == Short.class) {
+            dto.setName("int32");
+        } else if (type == BigInteger.class) {
+            dto.setName("int64");
+        } else if (type == LocalDateTime.class) {
+            dto.setName("google.protobuf.Timestamp");
+        } else if (type == List.class) {
+            Type genericReturnType = parameter.getGenericReturnType();
+            ParameterizedType pType = (ParameterizedType) genericReturnType;
+            Class<?> clazz = (Class<?>) pType.getActualTypeArguments()[0];
+
+            ParameterDto listDto = new ParameterDto();
+            listDto.setType(clazz);
+            listDto.setName(clazz.getName());
+            listDto.setAnnotatedType(clazz.getAnnotatedSuperclass());
+
+            TypeDto dto2 = typeMapper(listDto);
+
+            dto.setName("repeated " + dto2.getName());
+
+            if (dto2.getCustomFlag()) {
+                dto.setCustomFlag(true);
+            }
+        } else {
+            dto.setName(type.getSimpleName());
+            dto.setCustomFlag(true);
+        }
+
+        return dto;
+    }
+
+    private static StringBuilder writeParameterType(List<ParameterDto> list, StringBuilder currentContentBuilder) {
 
         StringBuilder contentBuilder = new StringBuilder();
         StringBuilder contentBuilder2 = new StringBuilder();
@@ -269,37 +330,31 @@ public class ProtoCompiler {
         Integer index = 1;
 
         for (ParameterDto parameter : list) {
-            if (parameter.getType() == String.class) {
-                contentBuilder.append("  ").append("string").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Integer.class) {
-                contentBuilder.append("  ").append("int32").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Long.class) {
-                contentBuilder.append("  ").append("int64").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Boolean.class) {
-                contentBuilder.append("  ").append("bool").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Double.class) {
-                contentBuilder.append("  ").append("int64").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Float.class) {
-                contentBuilder.append("  ").append("int64").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Byte.class) {
-                contentBuilder.append("  ").append("byte").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == Short.class) {
-                contentBuilder.append("  ").append("int32").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == BigDecimal.class) {
-                contentBuilder.append("  ").append("int64").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else if (parameter.getType() == BigInteger.class) {
-                contentBuilder.append("  ").append("int64").append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
-            } else {
+            TypeDto type = typeMapper(parameter);
+
+            contentBuilder.append("  ").append(type.getName()).append(" ").append(parameter.getName()).append(" = ").append(index + ";\n");
+
+            if (type.getCustomFlag()) {
                 String parmName = parameter.getAnnotatedType().toString();
+
+                if (type.getDecimalFlag()) {
+                    if (currentContentBuilder.indexOf("message DecimalValue {") == -1) {
+                        contentBuilder2.append("message DecimalValue {\n");
+                        contentBuilder2.append("  uint32 scale = 1;\n");
+                        contentBuilder2.append("  uint32 precision = 2;\n");
+                        contentBuilder2.append("  bytes value = 3;\n");
+                        contentBuilder2.append("}\n");
+                        contentBuilder2.append("\n");
+                    }
+
+                    continue;
+                }
 
                 try {
                     java.io.File f = new java.io.File(appDir);
                     URL[] cp = {f.toURI().toURL()};
                     URLClassLoader urlcl = new URLClassLoader(cp);
                     Class clazz = urlcl.loadClass(parmName);
-
-                    contentBuilder.append("  ").append(parameter.getType().getSimpleName()).append(" ")
-                            .append(parameter.getName()).append(" = ").append(index + ";\n");
 
                     String header = "message " + parameter.getType().getSimpleName() + " {\n";
 
@@ -315,13 +370,13 @@ public class ProtoCompiler {
                             list2.add(dto);
                         }
 
-                        contentBuilder2.append(checkParameterType(list2, currentContentBuilder));
+                        contentBuilder2.append(writeParameterType(list2, currentContentBuilder));
                     }
-                } catch (ClassNotFoundException | MalformedURLException e) {
-                    throw new RuntimeException(e);
+                } catch (Exception e) {
+                    contentBuilder.append("  ").append("???").append(" ")
+                            .append(parameter.getName()).append(" = ").append(index + ";\n");
                 }
             }
-
             index++;
         }
 

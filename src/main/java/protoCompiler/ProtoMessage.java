@@ -1,7 +1,8 @@
 // ProtoMessage.java
-package ProtoCompiler.src.main.java.protoCompiler;
+package ProtoCompiler.src.main.java.protocompiler;
 
 import java.lang.reflect.Parameter;
+import java.lang.reflect.Type;
 
 public class ProtoMessage {
     private String messageName;
@@ -9,6 +10,16 @@ public class ProtoMessage {
     private String methodName;
     private Class<?> returnType;
     private String returnName;
+
+    private Type genericReturnType;
+
+    public Type getGenericReturnType() {
+        return genericReturnType;
+    }
+
+    public void setGenericReturnType(Type genericReturnType) {
+        this.genericReturnType = genericReturnType;
+    }
 
     public String getMessageName() {
         return messageName;
@@ -48,16 +59,5 @@ public class ProtoMessage {
 
     public void setReturnName(String returnName) {
         this.returnName = returnName;
-    }
-
-    @Override
-    public String toString() {
-        return "ProtoMessage{" +
-                "messageName='" + messageName + '\'' +
-                ", parameters='" + parameters + '\'' +
-                ", methodName='" + methodName + '\'' +
-                ", returnType='" + returnType + '\'' +
-                ", returnType='" + returnName + '\'' +
-                '}';
     }
 }

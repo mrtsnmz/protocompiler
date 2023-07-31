@@ -1,0 +1,15 @@
+syntax = "proto3";
+package packageName;
+
+import "google/protobuf/empty.proto";
+
+message IndexResponse {
+  string index = 1;
+}
+
+message IndexRequest {
+}
+
+service IndexControllerGrpcService {
+  rpc Index (IndexRequest) returns (IndexResponse) {}
+}
